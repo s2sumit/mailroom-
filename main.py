@@ -8,10 +8,11 @@ from fastapi import FastAPI, Request
 from fastapi.responses import Response
 
 PROFILE = "ga5-mailroom-action-gate/v2"
-PROMPT_VERSION = "v6-exp2"          # change this text whenever you change SYSTEM, to drop old cached answers
+PROMPT_VERSION = "v7-exp3"          # change this text whenever you change SYSTEM, to drop old cached answers
 
 # ---- experiment switches (these let me learn what the grader expects; remove when done) ----
 CONF_REF_MODE = "CASE"        # request_confirmation referenceId: "ORD" (order id) or "CASE" (case id)
+EXP_VAR = {"d_3F3XqYmNfEfWrobQLT": "no_action", "d_8neGM3FNeobM5zpnVC": "update_internal_record", "d_BaqH3X7gdKjVgTpszC": "update_internal_record", "d_3sgjqvbVnuyutSgnfQ": "request_confirmation", "d_5digrXZ7ZuAX7mxxXD": "request_confirmation", "d_9HbBn5si3JByuGHMMj": "request_confirmation", "d_E3vk9HA63yxMWWeYv5": "request_confirmation", "d_2mTP5w65vrK7RtcT7G": "create_draft", "d_6apny4tjivPDHzAEoe": "create_draft", "d_8kuwmdSq65SCKbu4BC": "create_draft", "d_AJLB5gyaCtUJLAg8gP": "create_draft", "d_NcXwntaLYPyjmJTSdN": "create_draft", "d_ZaWk5Gkry29gbbsn6W": "create_draft", "d_dws6DyPFRpVp6Vw5z9": "create_draft", "d_irSwgtWXKmPmA6Gcy7": "create_draft"}
 EXP_POL_IDS = set(["d_2mTP5w65vrK7RtcT7G", "d_3sgjqvbVnuyutSgnfQ", "d_5digrXZ7ZuAX7mxxXD", "d_6apny4tjivPDHzAEoe", "d_8kuwmdSq65SCKbu4BC", "d_8neGM3FNeobM5zpnVC", "d_AJLB5gyaCtUJLAg8gP", "d_RbvBZoF4coWZKVoA4K", "d_Rg8LR2H8eBfpaKg495", "d_VjjEczLZYYDBZNqTrG", "d_Zwm3GBzLLgL7MGu9mo", "d_iYS6qgCFaPEQkTTjHG", "d_jkTBDgkaCJ2itio6J4", "d_qkNC8sbTunJVyLMGSG", "d_sJJzqkvo8DioxeQH9u"])   # core dossiers that also cite their scenario policy line
 ALLOWED = ["create_draft", "update_internal_record", "send_approved_notice",
            "request_confirmation", "quarantine_item", "no_action"]
@@ -369,6 +370,18 @@ def experiment_evidence(d, ev, action=None):
                 for l in s["lines"]:
                     if not GENERIC_POLICY.search(l["text"]) and not l["text"].startswith("Only current evidence"):
                         ev.append(l["lineId"])
+    v = EXP_VAR.get(d["dossierId"])
+    if v:
+        txt = {lid: t for lid, t, s in all_lines(d)}
+        if v == "no_action":
+            f = find(all_lines(d), R_FOLLOW, kinds={"message"})
+            if f: ev.append(f[0])
+        elif v == "update_internal_record":
+            ev = [x for x in ev if not R_SIG.search(txt[x])]
+        elif v == "request_confirmation":
+            ev = [x for x in ev if not R_SUPPLIES.search(txt[x])]
+        elif v == "create_draft":
+            ev = [x for x in ev if not (R_PREP.search(txt[x]) and not R_SENDER.search(txt[x]) and "recorded by the gateway" not in txt[x] and "status “" not in txt[x])]
     return ev
 
 def make_proposal(d, action, target, payload, ev):
