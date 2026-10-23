@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import Response
 
 PROFILE = "ga5-mailroom-action-gate/v2"
-PROMPT_VERSION = "v5-exp1"          # change this text whenever you change SYSTEM, to drop old cached answers
+PROMPT_VERSION = "v6-exp2"          # change this text whenever you change SYSTEM, to drop old cached answers
 
 # ---- experiment switches (these let me learn what the grader expects; remove when done) ----
 CONF_REF_MODE = "CASE"        # request_confirmation referenceId: "ORD" (order id) or "CASE" (case id)
@@ -102,7 +102,7 @@ def resolve(d, action):
         w = t[1].group(2)
         rc = {"already completed": "ALREADY_COMPLETED", "completed": "ALREADY_COMPLETED",
               "duplicate": "DUPLICATE", "informational": "INFORMATIONAL"}[w]
-        return (None, {"reasonCode": rc, "referenceId": f[1].group(1)}, [t[0], f[0]])
+        return (None, {"reasonCode": rc, "referenceId": t[1].group(1)}, [t[0]])
     if action == "send_approved_notice":
         p = find(L, R_PERMIT, kinds={"approval"})
         if not p: return None
@@ -361,13 +361,13 @@ def build_from_model(d, dec):
             "target": target, "payload": payload, "evidence": ev}
 
 
-def experiment_evidence(d, ev):
+def experiment_evidence(d, ev, action=None):
     ev = list(ev)
-    if d["dossierId"] in EXP_POL_IDS:
+    if action != "send_approved_notice":
         for s in d["sources"]:
             if s["kind"] == "policy":
                 for l in s["lines"]:
-                    if not GENERIC_POLICY.search(l["text"]):
+                    if not GENERIC_POLICY.search(l["text"]) and not l["text"].startswith("Only current evidence"):
                         ev.append(l["lineId"])
     return ev
 
@@ -391,7 +391,7 @@ def build_proposal(d, dec):
         if ra:
             action, r = ra, resolve(d, ra)
     if r is not None:
-        return make_proposal(d, action, r[0], r[1], experiment_evidence(d, r[2]))
+        return make_proposal(d, action, r[0], r[1], experiment_evidence(d, r[2], action))
     return build_from_model(d, dec)
 
 def fallback(d):
